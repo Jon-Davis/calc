@@ -1,4 +1,5 @@
 use std::ops::{Add, Sub, Div, Mul, Rem};
+use std::cmp::{PartialEq,PartialOrd,Ordering};
 use std::fmt;
 
 pub struct Number {
@@ -44,7 +45,59 @@ impl<'a,'b> Add<&'b Number> for &'a Number {
 
 }
 
+impl PartialEq for Number {
 
+    fn eq(&self, num : &Number) -> bool{
+        for i in self.value.iter().zip(num.value.iter()){
+            let (a,b) = i;
+            if a != b {return false};
+        }
+        return true;
+    }
+
+    fn ne(&self, num : &Number) -> bool{
+        for i in self.value.iter().zip(num.value.iter()){
+            let (a,b) = i;
+            if a == b {return false};
+        }
+        return true;
+    }
+}
+
+impl PartialOrd for Number {
+    fn partial_cmp(&self, num: &Number) -> Option<Ordering> {
+        if self == num {
+            Some(Ordering::Equal)
+        } else if self < num {
+            Some(Ordering::Less)
+        } else {
+            Some(Ordering::Greater)
+        }
+    }
+
+    fn lt(&self, num : &Number) -> bool {
+        for i in self.value.iter().rev().zip(num.value.iter().rev()){
+            let (a,b) = i;
+            if a < b {return true}
+            if a > b {return false}
+        }
+        return false;
+    }
+    fn gt(&self, num : &Number) -> bool {
+        for i in self.value.iter().rev().zip(num.value.iter().rev()){
+            let (a,b) = i;
+            if a < b {return false}
+            if a > b {return true}
+        }
+        return false;
+    }
+    fn le(&self, num : &Number) -> bool {
+        self < num || self == num
+    }
+    fn ge(&self, num : &Number) -> bool {
+        self > num || self == num
+    }
+}
 /*
 impl<'a,'b> Sub<&'b Number> for &'a Number {
     type Output = Number;
@@ -91,12 +144,23 @@ impl fmt::Binary for Number {
     }
 }
 */
-impl fmt::LowerHex for Number {
+impl fmt::UpperHex for Number {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut string_value = String::with_capacity(self.value.len()*16);
+        let mut fmt_string = String::with_capacity(self.value.len()*24);
+
+        //convert the number into Hex
         for i in self.value.iter().rev() {
-            string_value.push_str(&format!("{:016x}",i));
+            string_value.push_str(&format!("{:X}",i));
         }
-        write!(f, "{}", string_value)
+
+        //space out the numbers
+        for (i,c) in string_value.chars().enumerate(){
+            fmt_string.push(c);
+            if i % 2 != 0 {
+                fmt_string.push(' ');
+            }
+        }
+        write!(f, "{}", fmt_string)
     }
 }
