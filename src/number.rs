@@ -1,3 +1,14 @@
+/* ============================================================================================ */
+/*     Description                                                                              */
+/* ============================================================================================ */
+// This Module implements arbitrary percision arithmetic in rust.
+// The methodology used is each Integer creates a vector of u64 numbers.
+// The numbers are stored from least significant 64bits to most significant 64bits.
+
+
+/* ============================================================================================ */
+/*     Modules                                                                                  */
+/* ============================================================================================ */
 use std::ops::{Add, Sub, Div, Mul, Rem, Neg};
 use std::cmp::{PartialEq,PartialOrd,Ordering};
 use std::fmt;
@@ -57,7 +68,6 @@ impl<'a,'b> Add<&'b Integer> for &'a Integer {
         let mut new_value = Vec::with_capacity(capacity);
         let mut carry = 0;
         let (min,max) = if &self.abs() < &num.abs() {(self,num)} else {(num,self)};
-
         // Loop through the two numbers and add or subtract depending on sign
         for i in min.value.iter().zip(max.value.iter()){
             let (a,b) = (i.0.clone(),i.1.clone());
@@ -69,8 +79,12 @@ impl<'a,'b> Add<&'b Integer> for &'a Integer {
                 carry = if overflow1 || overflow2 {1} else {0};
                 new_value.push(new_num);
             } else {
-                let (a,carry) = if b < (a + carry) {(18446744073709551615-a,1)} else {(a,0)};
-                let new_num = b-a-carry;
+                let (new_num,c) = if b < a || b < (a + carry) {
+                    ((u64::MAX-a)+(b+1),1)
+                } else {
+                    (b-a-carry,0)
+                };
+                carry = c;
                 new_value.push(new_num);
             }
         }
@@ -117,6 +131,7 @@ impl<'a> Neg for &'a Integer {
 impl<'a,'b> Sub<&'b Integer> for &'a Integer {
     type Output = Integer;
 
+    #[inline]
     fn sub(self, num : &'b Integer) -> Integer {
         self + &(-num)
     }
@@ -179,6 +194,12 @@ impl PartialOrd for Integer {
             return true;
         }
 
+        if self.value.len() > num.value.len() {
+            return false;
+        } else if self.value.len() < num.value.len() {
+            return true;
+        }
+
         for i in self.value.iter().rev().zip(num.value.iter().rev()){
             let (a,b) = i;
             if a < b {return true}
@@ -195,6 +216,13 @@ impl PartialOrd for Integer {
         } else if num.negative != self.negative {
             return false;
         }
+
+        if self.value.len() > num.value.len() {
+            return true;
+        } else if self.value.len() < num.value.len() {
+            return false;
+        }
+
         for i in self.value.iter().rev().zip(num.value.iter().rev()){
             let (a,b) = i;
             if a < b {return false}
@@ -327,6 +355,9 @@ fn integer_ordering_test() {
     let ten1 = Integer::from_int(10);
     let ten2 = Integer::from_int(10);
     let neg_ten = -&ten1;
+    let max = Integer::from_int(u64::MAX);
+    let one = Integer::from_int(1);
+    let max_one = &max+&one;
 
     assert!(!(zero < zero), format!("\nEvaluated zero < zero, when they should be equal.\nzero = {:X}\nzero = {:X}\n", zero, zero));
     assert!(!(ten1 > ten1), format!("\nEvaluated ten1 > ten1, when they should be equal.\nten1 = {:X}\nten1 = {:X}\n", ten1, ten1));
@@ -335,18 +366,29 @@ fn integer_ordering_test() {
     assert!(ten1 > zero, format!("\nEvaluated zero >= ten1, when it should be less than.\nzero = {:X}\nten1 = {:X}\n", zero, ten1));
     assert!(neg_ten < ten1, format!("\nEvaluated neg_ten >= ten1, when it should be less than.\nneg_ten = {:X}\nten1 = {:X}\n", neg_ten, ten1));
     assert!(!(neg_ten > ten1), format!("\nEvaluated neg_ten >= ten1, when it should be less than.\nneg_ten = {:X}\nten1 = {:X}\n", neg_ten, ten1));
+    assert!(&max_one > &max, format!("\nEvaluated max_one <= max, when it should be greater than than.\nmax_one = {:X}\nmax = {:X}\n", max_one, max));
+    assert!(&max < &max_one, format!("\nEvaluated max_one <= max, when it should be greater than than.\nmax_one = {:X}\nmax = {:X}\n", max_one, max));
 }
 
+// Tests to ensure that addition of Integers is working properly
+// Tests to ensure a positive Integer and a positive Integer add together properly
+// Tests to ensure a positive Integer and a negative Integer add together properly
+// Tests to ensure a negative Integer and a negative Integer add together properly
+// Tests to ensure that whenever the sum equals zero, that zero is non-negative
+// Tests when overflow of the initial 64bit number occurs that the Integer carries over properly
+// Tests when underflow of the Integer occurs that the Integer borrows properly
 #[test]
 fn integer_add_test(){
     let zero = Integer::from_int(0);
     let one = Integer::from_int(1);
-    //let max = Integer::from_int(u64::MAX);
+    let max = Integer::from_int(u64::MAX);
+    let max_one = &max + &one;
     let ten = Integer::from_int(10);
+    let nine = Integer::from_int(9);
     let neg_two = -&Integer::from_int(2);
     let neg_one = -&one;
     let mut ten_from_one = Integer::from_int(0);
-    for i in 0..10 {
+    for _ in 0..10 {
         ten_from_one = &ten_from_one + &one;
     }
 
@@ -354,7 +396,11 @@ fn integer_add_test(){
     assert!(&one - &one == zero, format!("\nEvaluated one - one being != zero, when it should be zero\n"));
     assert!(&neg_one + &neg_one == neg_two, format!("\nEvaluated neg_one + neg_one being != neg_two, when they should be equal\n"));
     assert!(&neg_one + &one == zero, format!("\nEvaluated neg_one + one being != zero, when it should be zero\n"));
+    assert!(&ten - &nine == one, format!("\nEvaluated ten - nine to being != one, when it should be one\n"));
+    assert!(&ten - &one == nine, format!("\nEvaluated ten - one to being != nine, when it should be nine\n"));
     assert!(&neg_one + &one == zero, format!("\nEvaluated one + neg_one being != zero, when it should be zero\n"));
     assert!(&zero + &zero == zero, format!("\nEvaluated zero + zero being != zero, when it should be zero\n"));
-    assert!(&ten == &ten_from_one, format!("\nEvaluated ten != to &ten_from_one when it should be equal\nten = {:X}\nten_from_one = {:X}",ten,ten_from_one))
+    assert!(&ten == &ten_from_one, format!("\nEvaluated ten != to &ten_from_one when it should be equal\nten = {:X}\nten_from_one = {:X}",ten,ten_from_one));
+    assert!(&max_one - &max == one, format!("\nEvaluated max_one - max to be != one\nmax_one = {:X}\nmax = {:X}",max_one,max));
+    assert!(&max_one - &max_one == zero, format!("\nEvaluated max_one - max_one to be != zero\nmax_one = {:X}\nmax_one = {:X}",max_one,max_one));
 }
