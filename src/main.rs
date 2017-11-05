@@ -1,6 +1,4 @@
-mod number;
-use number::*;
-use std::u64;
+mod integer;
 
 fn main() {
 

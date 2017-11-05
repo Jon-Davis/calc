@@ -33,7 +33,7 @@ impl Integer {
             value: vec![init],
             negative: false,
         }
-    }
+    } // End of from_int function
 
     // returns a new Integer that is the absolute value of the calling Integer.
     pub fn abs(&self) -> Integer {
@@ -41,7 +41,23 @@ impl Integer {
             value: self.value.clone(),
             negative: false,
         }
-    }
+    } // End of abs function
+
+    // returns a Ordering reguardless of sign
+    pub fn abs_cmp(&self,other : &Integer) -> Option<Ordering> {
+        if self.value.len() > other.value.len() {
+            return Some(Ordering::Greater);
+        } else if self.value.len() < other.value.len() {
+            return Some(Ordering::Less);
+        }
+
+        for i in self.value.iter().rev().zip(other.value.iter().rev()){
+            let (a,b) = i;
+            if a < b {return Some(Ordering::Less)}
+            if a > b {return Some(Ordering::Greater)}
+        }
+        return Some(Ordering::Equal);
+    } // End of abs_cmp function
 
     // check to see if zero
     pub fn is_zero(&self) -> bool {
@@ -50,8 +66,8 @@ impl Integer {
         } else {
             false
         }
-    }
-}
+    } // End of is_zero function
+} // End of Integer Implementation
 
 /* ============================================================================================ */
 /*     Operatiors [+ - / %]                                                                     */
@@ -67,7 +83,11 @@ impl<'a,'b> Add<&'b Integer> for &'a Integer {
         let capacity = self.value.len().max(num.value.len()) + 1;
         let mut new_value = Vec::with_capacity(capacity);
         let mut carry = 0;
-        let (min,max) = if &self.abs() < &num.abs() {(self,num)} else {(num,self)};
+        // Sort the two Integers by absolute value
+        let (min,max) = match self.abs_cmp(num) {
+            Some(Ordering::Less) => (self,num),
+            _ => (num,self)
+        };
         // Loop through the two numbers and add or subtract depending on sign
         for i in min.value.iter().zip(max.value.iter()){
             let (a,b) = (i.0.clone(),i.1.clone());
@@ -106,11 +126,11 @@ impl<'a,'b> Add<&'b Integer> for &'a Integer {
             value: new_value,
             negative: sign,
         }
-    }
-}
+    } // End of add function
+} // End of Add Implementation
 
 // Overloads the unary - operator such that -Integer is the negation of the number.
-// Returns a new Integer that is the negation of the input number.
+// Returns a new Integer that is the negation of the input numbers.
 impl<'a> Neg for &'a Integer {
     type Output = Integer;
 
@@ -123,8 +143,8 @@ impl<'a> Neg for &'a Integer {
                 negative: !self.negative,
             }
         }
-    }
-}
+    } // End of neg function
+} // End of Neg implementation
 
 // Overloads the - operator such that Integer - Integer is the summation of the negation.
 // Returns a new Integer that is the summation of the negation.
@@ -134,8 +154,65 @@ impl<'a,'b> Sub<&'b Integer> for &'a Integer {
     #[inline]
     fn sub(self, num : &'b Integer) -> Integer {
         self + &(-num)
-    }
-}
+    } // End of sub function
+} // End of Sub implementation
+
+// Overloads the * operator such that Intger - Integer is the product of the two numbers
+// Returns a new Integer that is the product of the input numbers.
+impl<'a,'b> Mul<&'b Integer> for &'a Integer {
+    type Output = Integer;
+
+    fn mul(self, num :&'b Integer) -> Integer {
+        let (min,max) = match self.abs_cmp(num) {
+            Some(Ordering::Less) => (self,num),
+            _ => (num,self)
+        };
+        let mut new_value = Vec::with_capacity(self.value.len()+num.value.len());
+        let mut carry : u64 = 0;
+        for min_i in min.value.iter() {
+            // break the 64 bit number into two 32 bit numbers
+            let (min_low_32, min_high_32) = (min_i & 0xFFFFFFFF, min_i >> 32);
+            let mut init_index = 0;
+            // run the broken up numbers seperately so that 32bit * 32bit numbers produce 64bit
+            for i in 0..2 {
+                //determine which number will run in this loop
+                let min_num = if i == 0 {min_low_32} else {min_high_32};
+                let mut index = init_index + i;
+                for max_i in max.value.iter() {
+                    // break the 64 bit number into two 32 bit numbers
+                    let (max_low_32, max_high_32) = (max_i & 0xFFFFFFFF, max_i >> 32);
+                    // multiply out the two sections
+                    let low_multiplied = min_num * max_low_32;
+                    let high_multiplied = min_num * max_high_32;
+                    // prepare the high_multiplied value for summation
+                    let high_value = (high_multiplied << 32) + carry;
+                    // perform the addition and check for overflow, add the overflow to the carry
+                    let (sum,overflow) = low_multiplied.overflowing_add(high_value);
+                    carry = (high_multiplied >> 32) + if overflow {1u64} else {0u64};
+                    // sum the newly calculated value on the vector
+                    if new_value.len() < index + 1 {
+                        // if the vector is empty, push the number onto the vector
+                        new_value.push(sum);
+                    } else {
+                        // if the vector is !empty, sum the calculated value with the old value
+                        let (sum,overflow) = sum.overflowing_add(new_value[index]);
+                        carry = carry + if overflow {1u64} else {0u64};
+                        new_value[index] = sum;
+                    }
+                    // Iterate through the index so the min_high_32 knows where to begin
+                    index = index + 1;
+                }
+                // Iterate the init_index such that future iterations know where to begin
+                init_index = init_index + 2;
+            }
+        }
+
+        Integer {
+            value: new_value,
+            negative: min.negative != max.negative,
+        }
+    } // End of mul function
+} // End of Mul implementation
 
 /* ============================================================================================ */
 /*     Operatiors and Ordering [== != > < >= <=]                                                */
@@ -155,7 +232,7 @@ impl PartialEq for Integer {
             if a != b {return false};
         }
         return true;
-    }
+    } // End of eq function
 
     // Overloads the != operator and checks if two Integers are equal.
     // Returns false if the two Integers are equal to one another, true otherwise.
@@ -168,91 +245,63 @@ impl PartialEq for Integer {
             if a == b {return false};
         }
         return true;
-    }
-}
+    } // End of ne function
+} // End of PartialEq implementation
 
 // Implements Partial Ordering [< > <= >=] for type Integer
 impl PartialOrd for Integer {
 
     // Comapres two Integers and returns an Ordering.
-    fn partial_cmp(&self, num: &Integer) -> Option<Ordering> {
-        if self == num {
-            Some(Ordering::Equal)
-        } else if self < num {
+    fn partial_cmp(&self, other: &Integer) -> Option<Ordering> {
+        if other.negative && !self.negative {
+            Some(Ordering::Greater)
+        } else if other.negative != self.negative {
             Some(Ordering::Less)
         } else {
-            Some(Ordering::Greater)
+            self.abs_cmp(other)
         }
-    }
+    } // End of partial_cmp function
 
     // Compares two Integers and returns true if the other number is
     // Greater Than or Equal in value false otherwise.
-    fn lt(&self, num : &Integer) -> bool {
-        if num.negative && !self.negative {
-            return false;
-        } else if num.negative != self.negative {
-            return true;
+    fn lt(&self, other : &Integer) -> bool {
+        match self.partial_cmp(other) {
+            Some(Ordering::Less) => true,
+            _ => false,
         }
-
-        if self.value.len() > num.value.len() {
-            return false;
-        } else if self.value.len() < num.value.len() {
-            return true;
-        }
-
-        for i in self.value.iter().rev().zip(num.value.iter().rev()){
-            let (a,b) = i;
-            if a < b {return true}
-            if a > b {return false}
-        }
-        return false;
-    }
+    } // End of lt function
 
     // Compares two Integers and returns false if the other number is
     // Less Than or Equal in value true otherwise.
-    fn gt(&self, num : &Integer) -> bool {
-        if num.negative && !self.negative {
-            return true;
-        } else if num.negative != self.negative {
-            return false;
+    fn gt(&self, other : &Integer) -> bool {
+        match self.partial_cmp(other) {
+            Some(Ordering::Greater) => true,
+            _ => false,
         }
-
-        if self.value.len() > num.value.len() {
-            return true;
-        } else if self.value.len() < num.value.len() {
-            return false;
-        }
-
-        for i in self.value.iter().rev().zip(num.value.iter().rev()){
-            let (a,b) = i;
-            if a < b {return false}
-            if a > b {return true}
-        }
-        return false;
-    }
+    } // End of gt function
 
     // Compares two Integers and returns true if the other number is
     // Less Than or Equal in value false otherwise.
-    fn le(&self, num : &Integer) -> bool {
-        self < num || self == num
-    }
+    fn le(&self, other : &Integer) -> bool {
+        match self.partial_cmp(other) {
+            Some(Ordering::Less) => true,
+            Some(Ordering::Equal) => true,
+            _ => false,
+        }
+    } // End of le function
 
     // Compares two Integers and returns false if the other number is
     // Less Than or Equal in value true otherwise.
-    fn ge(&self, num : &Integer) -> bool {
-        self > num || self == num
-    }
-}
+    fn ge(&self, other : &Integer) -> bool {
+        match self.partial_cmp(other) {
+            Some(Ordering::Greater) => true,
+            Some(Ordering::Equal) => true,
+            _ => false,
+        }
+    } // End of ge function
+} // End of PartialOrd implementation
+
 /*
-
-impl<'a,'b> Mul<&'b Integer> for &'a Integer {
-    type Output = Integer;
-
-    fn mul(self, num :&'b Integer) -> Integer {
-        Integer {num: self.num * num.num}
-    }
-}
-
 impl<'a,'b> Div<&'b Integer> for &'a Integer {
     type Output = Integer;
 
@@ -314,8 +363,8 @@ impl fmt::UpperHex for Integer {
 
         // Writes the formated string back
         write!(f, "{}", fmt_string)
-    }
-}
+    } // End of fmt function
+} // End of fmt::UpperHex implementation
 
 /* ============================================================================================ */
 /*      Test cases                                                                              */
@@ -342,7 +391,7 @@ fn integer_equality_test() {
     assert!(zero != ten1, format!("\nEvaluated zero == ten1, when they should not be equal.\nzero = {:X}\nten1 = {:X}\n", zero, ten1));
     assert!(ten1 != neg_ten, format!("\nEvaluated ten1 == neg_ten, when they should not be equal.\nten1 = {:X}\nneg_ten = {:X}\n", ten1, neg_ten));
     assert!(neg_twenty != neg_ten, format!("\nEvaluated neg_twenty == neg_ten, when they should not be equal.\neg_twenty = {:X}\nneg_ten = {:X}\n", ten1, neg_ten));
-}
+} // End of integer_equality_test
 
 // Tests to ensure that the Partial Ordering operators return the proper value
 // If an Integer has a value less than another than the < operator should return true
@@ -368,7 +417,7 @@ fn integer_ordering_test() {
     assert!(!(neg_ten > ten1), format!("\nEvaluated neg_ten >= ten1, when it should be less than.\nneg_ten = {:X}\nten1 = {:X}\n", neg_ten, ten1));
     assert!(&max_one > &max, format!("\nEvaluated max_one <= max, when it should be greater than than.\nmax_one = {:X}\nmax = {:X}\n", max_one, max));
     assert!(&max < &max_one, format!("\nEvaluated max_one <= max, when it should be greater than than.\nmax_one = {:X}\nmax = {:X}\n", max_one, max));
-}
+} // End of integer_ordering_test
 
 // Tests to ensure that addition of Integers is working properly
 // Tests to ensure a positive Integer and a positive Integer add together properly
@@ -383,6 +432,7 @@ fn integer_add_test(){
     let one = Integer::from_int(1);
     let max = Integer::from_int(u64::MAX);
     let max_one = &max + &one;
+    let two_max = &max + &max;
     let ten = Integer::from_int(10);
     let nine = Integer::from_int(9);
     let neg_two = -&Integer::from_int(2);
@@ -403,4 +453,29 @@ fn integer_add_test(){
     assert!(&ten == &ten_from_one, format!("\nEvaluated ten != to &ten_from_one when it should be equal\nten = {:X}\nten_from_one = {:X}",ten,ten_from_one));
     assert!(&max_one - &max == one, format!("\nEvaluated max_one - max to be != one\nmax_one = {:X}\nmax = {:X}",max_one,max));
     assert!(&max_one - &max_one == zero, format!("\nEvaluated max_one - max_one to be != zero\nmax_one = {:X}\nmax_one = {:X}",max_one,max_one));
-}
+    assert!(&two_max - &max == max, format!("\nEvaluated two_max - max != max, when it should be max\ntwo_max = {:X}\nmax = {:X}\n",two_max,max));
+} // End of integer_add_test
+
+// Test to ensure that the Multiplication of an Integer and Zero is Zero
+// Test to ensure that the Multiplication of an Integer and an Integer is the product
+// Test to ensure that the Multiplication of an Integer and a negative Integer is negative
+// Test to ensure that the Multiplication of two negative Integers are positive
+// Test to ensure that when u64 numbers overflow, the overflow is handled properly
+#[test]
+fn interger_mul_test(){
+    let zero = Integer::from_int(0);
+    let two = Integer::from_int(2);
+    let ten = Integer::from_int(10);
+    let neg_ten = -&ten;
+    let hundred = Integer::from_int(100);
+    let neg_hundred = -&hundred;
+    let max = Integer::from_int(u64::MAX);
+    let max_ten = &(&(&(&max + &max) + &(&max + &max)) + &(&(&max + &max) + &(&max + &max))) + &(&max + &max);
+
+    assert!(&ten * &ten == hundred, format!("\nEvaluated ten * ten != hundred\nresult = {:X}\n",&ten * &ten));
+    assert!(&zero * &ten == zero, format!("\nEvaluated zero * ten != zero\nresult = {:X}\n",&ten * &ten));
+    assert!(&ten * &neg_ten == neg_hundred, format!("\nEvaluated neg_ten * ten != neg_hundred\nresult = {:X}\n",&ten * &neg_ten));
+    assert!(&neg_ten * &neg_ten == hundred, format!("\nEvaluated neg_ten * neg_ten != hundred\nresult = {:X}\n",&neg_ten * &neg_ten));
+    assert!(&max * &two == &max + &max, format!("\nEvaluated max * two != max + max\nproduct = {:X}\nsum = {:X}\n",&max * &two,&max + &max));
+    assert!(&max * &ten == max_ten, format!("\nEvaluated max * ten != max_ten\nproduct = {:X}\nsum = {:X}\n",&max * &ten,max_ten));
+} // End of interger_mul_test
