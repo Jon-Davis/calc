@@ -12,7 +12,7 @@
 use std::ops::{Add, Sub, Div, Mul, Rem, Neg};
 use std::cmp::{PartialEq,PartialOrd,Ordering};
 use std::fmt;
-use std::u64;
+use std::{u64,i64};
 
 /* ============================================================================================ */
 /*     Struct                                                                                   */
@@ -22,19 +22,45 @@ pub struct Integer {
     negative: bool,     // determines whether the number is positive or not.
 }
 
-/* ============================================================================================ */
-/*     Implementation                                                                           */
-/* ============================================================================================ */
+// Implementation
 impl Integer {
+/* ============================================================================================ */
+/*     Constructors                                                                             */
+/* ============================================================================================ */
+
+    // generates a Integer from a unsigned 32bit integer.
+    #[inline]
+    pub fn from_u32(init : u32) -> Integer {
+        Integer::from_u64(init as u64)
+    } // End of from_u64 function
+
+    // generate a Integer from a signed 32bit integer
+    #[inline]
+    pub fn from_i32(init : i32) -> Integer {
+        Integer::from_i64(init as i64)
+    }
 
     // generates a Integer from a unsigned 64bit integer.
-    pub fn from_int(init : u64) -> Integer {
+    pub fn from_u64(init : u64) -> Integer {
         Integer {
             value: vec![init],
             negative: false,
         }
-    } // End of from_int function
+    } // End of from_u64 function
 
+    // generate a Integer from a signed 64bit integer
+    pub fn from_i64(init : i64) -> Integer {
+        let negative =  if init < 0 {true} else {false};
+        let init : u64 = init.abs() as u64;
+        Integer {
+            value: vec![init],
+            negative: negative,
+        }
+    } // End of from_i64 function
+
+/* ============================================================================================ */
+/*     Methods                                                                                  */
+/* ============================================================================================ */
     // returns a new Integer that is the absolute value of the calling Integer.
     pub fn abs(&self) -> Integer {
         Integer {
@@ -58,6 +84,30 @@ impl Integer {
         }
         return Some(Ordering::Equal);
     } // End of abs_cmp function
+
+    // returns a new Integer that is the self ^ other
+    pub fn pow(&self,other :&Integer) -> Integer {
+        if (other.negative) {
+            panic!("Integers are not rational numbers!");
+        }
+
+        //check special cases for quicker execution
+        if other.is_zero() {
+            return Integer::from_i32(1);
+        } else if self.is_zero() {
+            return Integer::from_i32(0);
+        }
+
+        // calculate the result
+        let mut result = Integer::from_i32(1);
+        let mut count = Integer::from_i32(0);
+        let one = Integer::from_u64(1u64);
+        while &count < other {
+            result = &result * &self;
+            count = &count + &one;
+        }
+        result
+    }
 
     // check to see if zero
     pub fn is_zero(&self) -> bool {
@@ -136,7 +186,7 @@ impl<'a> Neg for &'a Integer {
 
     fn neg(self) -> Integer {
         if self.is_zero(){
-            Integer::from_int(0)
+            Integer::from_u64(0)
         } else {
             Integer{
                 value: self.value.clone(),
@@ -206,10 +256,16 @@ impl<'a,'b> Mul<&'b Integer> for &'a Integer {
                 init_index = init_index + 2;
             }
         }
-
+        // Calculates the sign for the new Integer
+        let mut is_zero = false;
+        if new_value.len() == 2 && new_value[0] == 0u64 && new_value[1] == 0u64{
+            is_zero = true;
+            new_value = vec!(0);
+        }
+        let sign = if is_zero {false} else {min.negative != max.negative};
         Integer {
             value: new_value,
-            negative: min.negative != max.negative,
+            negative: sign,
         }
     } // End of mul function
 } // End of Mul implementation
@@ -375,11 +431,11 @@ impl fmt::UpperHex for Integer {
 // If two Integer have the same value then == returns true, other wise != returns true
 #[test]
 fn integer_equality_test() {
-    let zero = Integer::from_int(0);
-    let ten1 = Integer::from_int(10);
-    let ten2 = Integer::from_int(10);
+    let zero = Integer::from_u64(0);
+    let ten1 = Integer::from_u64(10);
+    let ten2 = Integer::from_u64(10);
     let neg_ten = -&ten1;
-    let twenty = Integer::from_int(20);
+    let twenty = Integer::from_u64(20);
     let neg_twenty = -&twenty;
 
     assert!(zero.is_zero(), format!("\nEvaluated zero as not being zero\nzero = {:X}\n", zero));
@@ -400,12 +456,12 @@ fn integer_equality_test() {
 // If an Integer has a value greather than or equal to another than the >= operator should return true
 #[test]
 fn integer_ordering_test() {
-    let zero = Integer::from_int(0);
-    let ten1 = Integer::from_int(10);
-    let ten2 = Integer::from_int(10);
+    let zero = Integer::from_u64(0);
+    let ten1 = Integer::from_u64(10);
+    let ten2 = Integer::from_u64(10);
     let neg_ten = -&ten1;
-    let max = Integer::from_int(u64::MAX);
-    let one = Integer::from_int(1);
+    let max = Integer::from_u64(u64::MAX);
+    let one = Integer::from_u64(1);
     let max_one = &max+&one;
 
     assert!(!(zero < zero), format!("\nEvaluated zero < zero, when they should be equal.\nzero = {:X}\nzero = {:X}\n", zero, zero));
@@ -428,16 +484,16 @@ fn integer_ordering_test() {
 // Tests when underflow of the Integer occurs that the Integer borrows properly
 #[test]
 fn integer_add_test(){
-    let zero = Integer::from_int(0);
-    let one = Integer::from_int(1);
-    let max = Integer::from_int(u64::MAX);
+    let zero = Integer::from_u64(0);
+    let one = Integer::from_u64(1);
+    let max = Integer::from_u64(u64::MAX);
     let max_one = &max + &one;
     let two_max = &max + &max;
-    let ten = Integer::from_int(10);
-    let nine = Integer::from_int(9);
-    let neg_two = -&Integer::from_int(2);
+    let ten = Integer::from_u64(10);
+    let nine = Integer::from_u64(9);
+    let neg_two = -&Integer::from_u64(2);
     let neg_one = -&one;
-    let mut ten_from_one = Integer::from_int(0);
+    let mut ten_from_one = Integer::from_u64(0);
     for _ in 0..10 {
         ten_from_one = &ten_from_one + &one;
     }
@@ -456,6 +512,20 @@ fn integer_add_test(){
     assert!(&two_max - &max == max, format!("\nEvaluated two_max - max != max, when it should be max\ntwo_max = {:X}\nmax = {:X}\n",two_max,max));
 } // End of integer_add_test
 
+// Tests to ensure that small values are added together properly
+#[test]
+fn integer_loop_add_test() {
+    for i in -10i64..10i64 {
+        for j in -10i64..10i64 {
+            let answer = Integer::from_i64(i+j);
+            let i_num = Integer::from_i64(i);
+            let j_num = Integer::from_i64(j);
+            let result = &i_num + &j_num;
+            assert!(answer == result, format!("\nEvaluated {} + {} != {}",i,j,i+j));
+        }
+    }
+}
+
 // Test to ensure that the Multiplication of an Integer and Zero is Zero
 // Test to ensure that the Multiplication of an Integer and an Integer is the product
 // Test to ensure that the Multiplication of an Integer and a negative Integer is negative
@@ -463,13 +533,13 @@ fn integer_add_test(){
 // Test to ensure that when u64 numbers overflow, the overflow is handled properly
 #[test]
 fn interger_mul_test(){
-    let zero = Integer::from_int(0);
-    let two = Integer::from_int(2);
-    let ten = Integer::from_int(10);
+    let zero = Integer::from_u64(0);
+    let two = Integer::from_u64(2);
+    let ten = Integer::from_u64(10);
     let neg_ten = -&ten;
-    let hundred = Integer::from_int(100);
+    let hundred = Integer::from_u64(100);
     let neg_hundred = -&hundred;
-    let max = Integer::from_int(u64::MAX);
+    let max = Integer::from_u64(u64::MAX);
     let max_ten = &(&(&(&max + &max) + &(&max + &max)) + &(&(&max + &max) + &(&max + &max))) + &(&max + &max);
 
     assert!(&ten * &ten == hundred, format!("\nEvaluated ten * ten != hundred\nresult = {:X}\n",&ten * &ten));
@@ -479,3 +549,31 @@ fn interger_mul_test(){
     assert!(&max * &two == &max + &max, format!("\nEvaluated max * two != max + max\nproduct = {:X}\nsum = {:X}\n",&max * &two,&max + &max));
     assert!(&max * &ten == max_ten, format!("\nEvaluated max * ten != max_ten\nproduct = {:X}\nsum = {:X}\n",&max * &ten,max_ten));
 } // End of interger_mul_test
+
+// Tests to ensure that small values are multiplied together properly
+#[test]
+fn integer_loop_mul_test() {
+    for i in -10i64..10i64 {
+        for j in -10i64..10i64 {
+            let answer = Integer::from_i64(i*j);
+            let i_num = Integer::from_i64(i);
+            let j_num = Integer::from_i64(j);
+            let result = &i_num * &j_num;
+            assert!(answer == result, format!("\nEvaluated {} * {} != {}",i,j,i*j));
+        }
+    }
+}
+
+// Tests to ensure that the pow function is working properly
+#[test]
+fn integer_loop_pow_test() {
+    for i in 0u32..10u32 {
+        for j in 0u32..10u32 {
+            let answer = Integer::from_u32(i.pow(j));
+            let i_num = Integer::from_u32(i);
+            let j_num = Integer::from_u32(j);
+            let result = i_num.pow(&j_num);
+            assert!(answer == result, format!("\nEvaluated {} ^ {} != {}, was {:X}",i,j,i.pow(j),result));
+        }
+    }
+}
